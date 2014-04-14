@@ -39,8 +39,10 @@ from urlparse import urlsplit
 class ServerDoesNotExist(Exception):
     pass
 
-if not (getattr(settings, 'OGC_SERVER', False) and getattr(settings, 'OGC_SERVER', dict()).get('default', False)):
-    raise ImproperlyConfigured("You must define an OGC_SERVER setting.")
+if 'OGC_SERVER' not in settings:
+    OGC_SERVER = {}
+else:
+    OGC_SERVER = settings.OGC_SERVER
 
 class OGC_Server(object):
     """
@@ -190,28 +192,30 @@ class OGC_Servers_Handler(object):
     def all(self):
         return [self[alias] for alias in self]
 
+ogc_server_settings = None
+import ipdb;ipdb.set_trace()
+if any(settings.OGC_SERVER):
+    ogc_server_settings = OGC_Servers_Handler(settings.OGC_SERVER)['default']
 
-ogc_server_settings = OGC_Servers_Handler(settings.OGC_SERVER)['default']
+    _wms = None
+    _csw = None
+    _user, _password = ogc_server_settings.credentials
 
-_wms = None
-_csw = None
-_user, _password = ogc_server_settings.credentials
-
-http_client = httplib2.Http()
-http_client.add_credentials(_user, _password)
-http_client.add_credentials(_user, _password)
-_netloc = urlparse(ogc_server_settings.LOCATION).netloc
-http_client.authorizations.append(
-    httplib2.BasicAuthentication(
-        (_user, _password),
-        _netloc,
-        ogc_server_settings.LOCATION,
-        {},
-        None,
-        None,
-        http_client
+    http_client = httplib2.Http()
+    http_client.add_credentials(_user, _password)
+    http_client.add_credentials(_user, _password)
+    _netloc = urlparse(ogc_server_settings.LOCATION).netloc
+    http_client.authorizations.append(
+        httplib2.BasicAuthentication(
+            (_user, _password),
+            _netloc,
+            ogc_server_settings.LOCATION,
+            {},
+            None,
+            None,
+            http_client
+        )
     )
-)
 
 DEFAULT_TITLE=""
 DEFAULT_ABSTRACT=""
