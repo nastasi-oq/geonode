@@ -37,8 +37,6 @@ from django.core.urlresolvers import reverse
 from geonode import GeoNodeException
 from geonode.base.models import ResourceBase, ResourceBaseManager, Link, \
     resourcebase_post_save, resourcebase_post_delete
-from geonode.utils import _user, _password, get_wms
-from geonode.utils import http_client
 from geonode.geoserver.helpers import cascading_delete
 from geonode.people.models import Profile
 from geonode.security.enumerations import AUTHENTICATED_USERS, ANONYMOUS_USERS
@@ -70,9 +68,13 @@ class LayerManager(ResourceBaseManager):
 
     def __init__(self):
         models.Manager.__init__(self)
-        url = ogc_server_settings.rest
-        self.gs_catalog = Catalog(url, _user, _password)
-        self.gs_uploader = Client(url, _user, _password)
+
+        if any(settings.OGC_SERVER):
+            from geonode.utils import _user, _password, get_wms
+            from geonode.utils import http_client
+            url = ogc_server_settings.rest
+            self.gs_catalog = Catalog(url, _user, _password)
+            self.gs_uploader = Client(url, _user, _password)
 
 def add_bbox_query(q, bbox):
     '''modify the queryset q to limit to the provided bbox
@@ -323,8 +325,7 @@ def geoserver_pre_save(instance, sender, **kwargs):
     """
     url = ogc_server_settings.internal_rest
     try:
-        gs_catalog = Catalog(url, _user, _password)
-        gs_resource= gs_catalog.get_resource(instance.name,store=instance.store, workspace=instance.workspace)
+        gs_resource= self.gs_catalog.get_resource(instance.name,store=instance.store, workspace=instance.workspace)
     except (EnvironmentError, FailedRequestError) as e:
         gs_resource = None
         msg = ('Could not connect to geoserver at "%s"'
@@ -403,8 +404,7 @@ def geoserver_post_save(instance, sender, **kwargs):
     url = ogc_server_settings.internal_rest
 
     try:
-        gs_catalog = Catalog(url, _user, _password)
-        gs_resource= gs_catalog.get_resource(instance.name,store=instance.store, workspace=instance.workspace)
+        gs_resource= self.gs_catalog.get_resource(instance.name,store=instance.store, workspace=instance.workspace)
     except (FailedRequestError, EnvironmentError) as e:
         msg = ('Could not connect to geoserver at "%s"'
                'to save information for layer "%s"' % (
@@ -685,23 +685,6 @@ def set_attributes(layer, overwrite=False):
     Retrieve layer attribute names & types from Geoserver,
     then store in GeoNode database using Attribute model
     """
-
-    #Appending authorizations seems necessary to avoid 'layer not found' from GeoServer
-    http = httplib2.Http()
-    http.add_credentials(_user, _password)
-    _netloc = urlparse(ogc_server_settings.LOCATION).netloc
-    http.authorizations.append(
-        httplib2.BasicAuthentication(
-            (_user, _password),
-            _netloc,
-            ogc_server_settings.LOCATION,
-                {},
-            None,
-            None,
-            http
-        )
-    )
-
     attribute_map = []
     if layer.storeType == "dataStore":
         dft_url = ogc_server_settings.LOCATION + "wfs?" + urllib.urlencode({
@@ -710,8 +693,10 @@ def set_attributes(layer, overwrite=False):
             "request": "DescribeFeatureType",
             "typename": layer.typename.encode('utf-8'),
             })
+        # The code below will fail if http_client cannot be imported
         try:
-            body = http.request(dft_url)[1]
+            from geonode.utils import http_client
+            body = http_client.request(dft_url)[1]
             doc = etree.fromstring(body)
             path = ".//{xsd}extension/{xsd}sequence/{xsd}element".format(xsd="{http://www.w3.org/2001/XMLSchema}")
             attribute_map = [[n.attrib["name"],n.attrib["type"]] for n in doc.findall(path)]
