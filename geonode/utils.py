@@ -192,7 +192,6 @@ class OGC_Servers_Handler(object):
     def all(self):
         return [self[alias] for alias in self]
 
-ogc_server_settings = None
 if any(settings.OGC_SERVER):
     ogc_server_settings = OGC_Servers_Handler(settings.OGC_SERVER)['default']
 
@@ -216,6 +215,28 @@ if any(settings.OGC_SERVER):
         )
     )
 
+    def get_wms():
+        wms_url = ogc_server_settings.internal_ows + "?service=WMS&request=GetCapabilities&version=1.1.0"
+        netloc = urlparse(wms_url).netloc
+        http = httplib2.Http()
+        http.add_credentials(_user, _password)
+        http.authorizations.append(
+            httplib2.BasicAuthentication(
+                (_user, _password),
+                    netloc,
+                    wms_url,
+                    {},
+                    None,
+                    None,
+                    http
+                )
+            )
+        body = http.request(wms_url)[1]
+        _wms = WebMapService(wms_url, xml=body)
+        return _wms
+
+
+
 DEFAULT_TITLE=""
 DEFAULT_ABSTRACT=""
 
@@ -230,28 +251,6 @@ def check_geonode_is_up():
            'have started it.' % ogc_server_settings.LOCATION)
     assert resp['status'] == '200', msg
        
-
-def get_wms():
-    global _wms
-    wms_url = ogc_server_settings.internal_ows + "?service=WMS&request=GetCapabilities&version=1.1.0"
-    netloc = urlparse(wms_url).netloc
-    http = httplib2.Http()
-    http.add_credentials(_user, _password)
-    http.authorizations.append(
-        httplib2.BasicAuthentication(
-            (_user, _password),
-                netloc,
-                wms_url,
-                {},
-                None,
-                None,
-                http
-            )
-        )
-    body = http.request(wms_url)[1]
-    _wms = WebMapService(wms_url, xml=body)
-    return _wms
-
 
 def _get_basic_auth_info(request):
     """
