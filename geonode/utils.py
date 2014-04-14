@@ -39,7 +39,7 @@ from urlparse import urlsplit
 class ServerDoesNotExist(Exception):
     pass
 
-if 'OGC_SERVER' not in settings:
+if hasattr(settings, 'OGC_SERVER'):
     OGC_SERVER = {}
 else:
     OGC_SERVER = settings.OGC_SERVER
@@ -193,7 +193,6 @@ class OGC_Servers_Handler(object):
         return [self[alias] for alias in self]
 
 ogc_server_settings = None
-import ipdb;ipdb.set_trace()
 if any(settings.OGC_SERVER):
     ogc_server_settings = OGC_Servers_Handler(settings.OGC_SERVER)['default']
 
